@@ -2,11 +2,14 @@ import pandas as pd
 import mysql.connector
 
 # **Step 1: Load Excel File**
-file_path = "C:/lara.xlsx"
+from datetime import datetime
+today = datetime.now().strftime("%Y-%m-%d")
+file_path = fr"C:\Users\E01412\Desktop\REPORTS\DAILY\lara_{today}.xlsx"
+
 xls = pd.ExcelFile(file_path)
 
 # Read Excel sheet
-df_sheet = xls.parse("sheet", skiprows=9, nrows=20)
+df_sheet = xls.parse("sheet", skiprows=9, nrows=21)
 
 # Rename columns
 df_lara = df_sheet.iloc[:, :17]
@@ -18,11 +21,8 @@ df_lara.columns = [
 ]
 
 # **Step 2: Data Cleaning**
-df_lara["item_no"] = df_lara["item_no"].astype(str)
-df_lara["item_no"] = df_lara["item_no"].replace(["nan", "None"], None)  # Replace invalid values
-
-# Handle missing descriptions
-df_lara["item_description"] = df_lara["item_description"].fillna("Unknown")
+df_lara["item_no"] = df_lara["item_no"].astype(str).replace(["nan", "None"], None)  # Handle missing item_no
+df_lara["item_description"] = df_lara["item_description"].fillna("Unknown")  # Fill missing descriptions
 
 # Convert numeric columns
 numeric_cols = [
@@ -32,6 +32,16 @@ numeric_cols = [
     "cumulative_achieved_upto_date", "percent_cumulative_achieved_upto_date", "tomorrow_program"
 ]
 df_lara[numeric_cols] = df_lara[numeric_cols].apply(pd.to_numeric, errors="coerce")
+
+# **Fix: Replace first "203" with "205"**
+changed_first_203 = False
+for idx, row in df_lara.iterrows():
+    if row["item_no"] == "203" and not changed_first_203:
+        df_lara.at[idx, "item_no"] = "205"
+        changed_first_203 = True
+
+# **Fix: Assign unique item_no before insertion**
+df_lara["item_no"] = df_lara["item_no"].fillna(df_lara.index.to_series().apply(lambda x: f"Item-{x+1}"))
 
 # **Step 3: Connect to MySQL**
 db_connection = mysql.connector.connect(
@@ -43,12 +53,12 @@ db_connection = mysql.connector.connect(
 cursor = db_connection.cursor()
 
 # **Step 4: Drop and Create Table**
-cursor.execute("DROP TABLE IF EXISTS lara")
+
 cursor.execute("""
-CREATE TABLE lara (
+CREATE TABLE IF NOT EXISTS  lara (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_no VARCHAR(50),
-    item_description VARCHAR(50),
+    item_description VARCHAR(255),
     unit VARCHAR(50),
     total_boq_quantity FLOAT,
     this_month_target FLOAT, 
@@ -63,7 +73,8 @@ CREATE TABLE lara (
     cumulative_achieved_upto_date FLOAT,    
     percent_cumulative_achieved_upto_date FLOAT,
     tomorrow_program FLOAT,
-    remark VARCHAR(50)
+    remark VARCHAR(50), 
+    entry_date DATE 
 )
 """)
 
@@ -72,8 +83,8 @@ insert_query = """
 INSERT INTO lara (item_no, item_description, unit, total_boq_quantity, this_month_target, rate, amount_target_this_month,
                   achieved_upto_previous_month, achieved_upto_previous_day_this_month, program_for_today, today_achieved,
                   cumulative_achieved_this_month, percent_achieved_this_month, cumulative_achieved_upto_date,
-                  percent_cumulative_achieved_upto_date, tomorrow_program, remark)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                  percent_cumulative_achieved_upto_date, tomorrow_program, remark, entry_date)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURDATE())
 """
 
 # Convert dataframe to list of tuples
@@ -82,41 +93,27 @@ cursor.executemany(insert_query, data)
 db_connection.commit()
 print("\n✅ Data successfully inserted into 'lara' table!")
 
-# **Step 6: Assign Unique `item_no` for Missing Values**
-cursor.execute("""
-UPDATE lara 
-SET item_no = CONCAT('Item-', id)
-WHERE item_no IS NULL OR item_no = '';
-""")
+# **Step 6: Optimized Bulk Update for `total_boq_quantity`**
+update_mappings = {
+    "A-1": 60, "A": 327670, "B": 162468, "C": 106487, "102": 549533, "109": 173990, "113": 1000,
+    "201": 16670, "Item-13": 16670, "205": 74465, "203": 8786, "301": 134966, "403": 13466,
+    "404": 4893, "405": 79600
+}
+
+# **Generate SQL Query for Bulk Update**
+update_query = """
+    UPDATE lara
+    SET total_boq_quantity = CASE item_no
+"""
+for item, value in update_mappings.items():
+    update_query += f" WHEN '{item}' THEN {value}"
+update_query += " ELSE total_boq_quantity END;"
+
+cursor.execute(update_query)
 db_connection.commit()
-print("\n✅ Missing item_no values assigned!")
-
-# **Step 7: Update `total_boq_quantity` Values Correctly**
-update_queries = [
-    ("A-1", 60),
-    ("A", 327670),
-    ("B", 162468),
-    ("C", 106487),
-    ("102", 549533),
-    ("109", 173990),
-    ("113", 1000),
-    ("201", 16670),
-    ("Item-13", 16670),
-    ("203", 74465),
-    ("203", 8786),  # Conflict: Two different values for "203". Choose one.
-    ("301", 134966),
-    ("403", 13466),
-    ("404", 4893),
-    ("405", 79600)
-]
-
-for item, value in update_queries:
-    cursor.execute("UPDATE lara SET total_boq_quantity = %s WHERE TRIM(item_no) = %s;", (value, item))
-    db_connection.commit()
-
 print("\n✅ total_boq_quantity values updated!")
 
-# **Step 8: Close Database Connection**
+# **Step 7: Close Database Connection**
 cursor.close()
 db_connection.close()
 print("\n🔄 Refresh Power BI to see the changes!")

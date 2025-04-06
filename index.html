@@ -1,0 +1,38 @@
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+    <meta charset="UTF-8">
+    <meta http-equiv="x-ua-compatible" content="IE=edge">
+    <title>Welcome to Arohan: Let's Rise Together</title>
+    <link id="lnkERACSS" type="text/css" rel="stylesheet">
+    <link href="stylesheets/content.css" type="text/css" rel="stylesheet">
+    <link rel="icon" href="images/a.png">
+
+    <script type="text/javascript">
+        function toggleFrame() {
+            var frameSet = document.getElementById('mainFrameset');
+            var toggleButton = document.getElementById('toggleBtn');
+
+            if (frameSet.cols === "13%,*") {
+                frameSet.cols = "0%,*"; // Hide left frame
+                toggleButton.innerText = "Show Left Panel";
+            } else {
+                frameSet.cols = "13%,*"; // Show left frame
+                toggleButton.innerText = "Hide Left Panel";
+            }
+        }
+    </script>
+</head>
+
+<!-- Frameset Layout -->
+<frameset id="mainFrameset" cols="13%,*" border="0" framespacing="0" frameborder="0">
+    <!-- Left Frame for Navigation -->
+    <frame name="top" src="top.aspx" scrolling="auto">
+
+    <!-- Right Frameset (Top Navigation and Main Content) -->
+    <frameset rows="8%,*" border="0" framespacing="0" frameborder="0">
+        <frame name="CompUser" src="CompUser.aspx" scrolling="no">
+        <frame name="mainFrame" src="home_new.aspx" scrolling="auto">
+    </frameset>
+</frameset>
+
+
+</html>

@@ -4,8 +4,7 @@ import mysql.connector
 # Configurations
 from datetime import datetime
 today = datetime.now().strftime("%Y-%m-%d")
-file_path = fr"C:\Users\E01412\Desktop\REPORTS\DAILY\lara_{today}.xlsx"
-
+file_path = fr"C:\Users\E01412\Desktop\REPORTS\DAILY\yamunavihar_{today}.xlsx"
 sheet_name = "sheet"  # Update if needed
 db_config = {
     "host": "localhost",
@@ -23,7 +22,7 @@ try:
     print("\n🔍 Available Columns:", df.columns.tolist())
 
     # Extract data from **rows 32 to 39** (Excel rows are 1-based, Pandas is 0-based)
-    df_finance = df.iloc[31:39, [0] + list(range(2, 9))]  # Column 0 for names, 2-8 for values
+    df_finance = df.iloc[34:41, :7]  # Column 0 for names, 2-8 for values
 
     # Rename first column to "metric_name"
     df_finance.rename(columns={df_finance.columns[0]: "metric_name"}, inplace=True)
@@ -31,9 +30,18 @@ try:
     # 🔍 Debug: Show extracted data before cleaning
     print("\n🔍 Extracted Data Before Cleaning:\n", df_finance)
 
-    # Convert wide format to long format (removing source_column)
-    df_finance = df_finance.set_index("metric_name").stack().reset_index(level=1, drop=True).reset_index()
-    df_finance.columns = ["metric_name", "metric_value"]  # Keeping only two columns
+
+    df_finance = df_finance.melt(id_vars=["metric_name"], var_name="source_column", value_name="metric_value")
+
+    # Keep only required columns
+    df_finance = df_finance[["metric_name", "metric_value"]]
+
+    # Convert 'metric_name' to string to avoid tuple issues
+    df_finance["metric_name"] = df_finance["metric_name"].astype(str)
+
+
+
+
 
     # Remove empty rows
     df_finance = df_finance.dropna(subset=["metric_value"])
@@ -60,20 +68,20 @@ try:
     # Drop and create table
     
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS lara_finance (
+        CREATE TABLE IF NOT EXISTS yamunavihar_finance (
             id INT AUTO_INCREMENT PRIMARY KEY,
             metric_name VARCHAR(255),
             metric_value DECIMAL(20, 2),
             entry_date DATE
-        )
+)
     """)
 
     # Insert cleaned data into MySQL table
-    insert_query = "INSERT INTO lara_finance (metric_name, metric_value, entry_date) VALUES (%s, %s, CURDATE())"
+    insert_query = "INSERT INTO yamunavihar_finance (metric_name, metric_value, entry_date) VALUES (%s, %s, CURDATE())"
     cursor.executemany(insert_query, df_finance[["metric_name", "metric_value"]].values.tolist())
     db_connection.commit()
 
-    print("\n✅ Data successfully inserted into 'lara_finance' table!")
+    print("\n✅ Data successfully inserted into 'yamuna' table!")
 
 except mysql.connector.Error as err:
     print(f"\n❌ MySQL Error: {err}")

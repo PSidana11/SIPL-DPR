@@ -2,8 +2,9 @@ import pandas as pd
 import mysql.connector
 from tabulate import tabulate
 
-# **Step 1: Load Excel File (Read up to row 34)**
-file_path = "C:/agra.xlsx"  # Update the path if needed
+from datetime import datetime
+today = datetime.now().strftime("%Y-%m-%d")
+file_path = fr"C:\Users\E01412\Desktop\REPORTS\DAILY\agra_{today}.xlsx"
 xls = pd.ExcelFile(file_path)
 
 # Read only rows 9 to 34 (skip first 8 rows, then take next 26 rows)
@@ -20,8 +21,6 @@ df_agra.columns = ["item_no", "item_description", "unit", "rate", "boq_qty", "th
 # **Step 2: Data Cleaning**
 df_agra["item_no"] = df_agra["item_no"].astype(str)  # Convert to string (handles numbers & text)
 df_agra["item_no"] = df_agra["item_no"].replace("nan", None)  # Replace 'nan' with NULL values
-
-# Handle missing descriptions
 df_agra["item_description"] = df_agra["item_description"].fillna("Unknown")
 
 # Convert numeric columns
@@ -37,16 +36,17 @@ df_agra[numeric_cols] = df_agra[numeric_cols].apply(pd.to_numeric, errors="coerc
 db_connection = mysql.connector.connect(
     host="localhost",
     user="root",
-    password="Hope@123",  # Update password
+    password="Hope@123",  # Update password if needed
     database="dpr"
 )
 cursor = db_connection.cursor()
 
 # **Step 4: Drop and Create Table**
-cursor.execute("DROP TABLE IF EXISTS agra")
+
+
 cursor.execute("""
-CREATE TABLE agra (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS agra (
+    batch_id INT AUTO_INCREMENT PRIMARY KEY,
     item_no VARCHAR(50),  -- Supports both numbers and text
     item_description TEXT NOT NULL,
     unit VARCHAR(50),
@@ -62,7 +62,9 @@ CREATE TABLE agra (
     cumulative_achieved_upto_date FLOAT,
     percent_cumulative_achieved_upto_date FLOAT CHECK (percent_cumulative_achieved_upto_date BETWEEN 0 AND 100),
     tomorrow_program FLOAT,
-    remark TEXT
+    remark TEXT,
+    entry_date DATE
+
 )
 """)
 
@@ -72,8 +74,8 @@ INSERT INTO agra (item_no, item_description, unit, rate, boq_qty, this_month_tar
                   achieved_upto_previous_month, achieved_upto_previous_day_this_month,
                   program_for_today, today_achieved, cumulative_achieved_this_month,
                   percent_achieved_this_month, cumulative_achieved_upto_date,
-                  percent_cumulative_achieved_upto_date, tomorrow_program, remark)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                  percent_cumulative_achieved_upto_date, tomorrow_program, remark, entry_date)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURDATE())
 """
 
 # Convert DataFrame to list of tuples
@@ -97,24 +99,21 @@ cursor.execute("SHOW COLUMNS FROM agra")
 columns = [column[0] for column in cursor.fetchall()]
 
 # Fetch all data
-cursor.execute("SELECT * FROM agra LIMIT 20")  # Fetch first 20 rows
+cursor.execute("SELECT * FROM agra ORDER BY entry_date DESC LIMIT 20")  # Fetch first 20 rows
 rows = cursor.fetchall()
 
 # Convert to DataFrame
 df_output = pd.DataFrame(rows, columns=columns)
 
-# **Step 7: Format for Better Readability**
-# Limit item_description to 10 words
+# Limit item_description to 10 words for better readability
 df_output["item_description"] = df_output["item_description"].apply(lambda x: limit_words(x, 10))
-
-# Set column width limit for better display
 pd.set_option("display.max_colwidth", 30)  # Prevents column wrapping
-pd.set_option("display.width", 1000)  # Ensures proper table width
+pd.set_option("display.width", 1000)       # Ensures proper table width
 
 # Print formatted table
 print("\n🔹 Data in Tabular Format:")
 print(tabulate(df_output, headers="keys", tablefmt="fancy_grid", showindex=False))
 
-# **Step 8: Close Database Connection**
+# **Step 7: Close Database Connection**
 cursor.close()
 db_connection.close()

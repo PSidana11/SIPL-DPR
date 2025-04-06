@@ -3,8 +3,9 @@ import mysql.connector
 
 # Load Excel file
 from datetime import datetime
-today = datetime.now().strftime("%Y-%m-%d") 
-file_path = fr"C:\Users\E01412\Desktop\REPORTS\DAILY\agra__{today}.xlsx"
+today = datetime.now().strftime("%Y-%m-%d")
+file_path = fr"C:\Users\E01412\Desktop\REPORTS\DAILY\dvc_{today}.xlsx"
+
 xls = pd.ExcelFile(file_path)
 df = xls.parse("sheet")
 
@@ -12,7 +13,7 @@ df = xls.parse("sheet")
 print("\n🔍 Available Columns:", df.columns.tolist())
 
 # Extract data from C to I (Excel columns 3 to 9 → Python index 2 to 8)
-df_finance = df.iloc[35:43, 2:9]
+df_finance = df.iloc[26:34, :5]
 
 # 🔍 Debug: Show extracted data
 print("\n🔍 Extracted Data Before Cleaning:\n", df_finance)
@@ -48,7 +49,7 @@ cursor = db_connection.cursor()
 # Drop and create a table
 
 cursor.execute("""
-    CREATE TABLE IF NOT EXISTS agra_finance (
+    CREATE TABLE IF NOT EXISTS dvc_finance (
         id INT AUTO_INCREMENT PRIMARY KEY,
         metric_name VARCHAR(100),
         metric_value FLOAT,
@@ -57,11 +58,11 @@ cursor.execute("""
 """)
 
 # Insert data into table
-insert_query = "INSERT INTO agra_finance (metric_name, metric_value, entry_date) VALUES (%s, %s, CURDATE())"
+insert_query = "INSERT INTO DVC_finance (metric_name, metric_value, entry_date) VALUES (%s, %s, CURDATE())"
 cursor.executemany(insert_query, df_finance.values.tolist())
 db_connection.commit()
 
-print("\n✅ Data successfully inserted into 'agra_finance' table!")
+print("\n✅ Data successfully inserted into 'dvc_finance' table!")
 
 # Close connection
 cursor.close()
